@@ -97,13 +97,18 @@ def format_releve(releve):
 
 def build_new_row():
     disconnected = True
+    releve = None
     while disconnected:
         try:
             releve = get_releve()
-            disconnected = False
         except (AttributeError, IndexError):
-            log("Web scrapping failed, new try")
-            sleep(10)
+            log("Récupération des données échouées, nouvel essai. Si ce problème persiste, reconnecte-toi sur NAW.")
+            sleep(15)
+        except requests.exceptions.ConnectionError:
+            log("Pas de connection internet, nouvel essai dans 15 secondes")
+            sleep(15)
+        else:
+            disconnected = False
 
     new_row = pd.DataFrame({**{"Date": [round_datetime(datetime.today())]},
                             **{colonie: [tdc] for colonie, tdc in zip(releve["Colonie"], releve["Tdc"])}})
