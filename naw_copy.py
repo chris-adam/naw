@@ -138,8 +138,10 @@ if __name__ == "__main__":
             if time()-time_sheet >= UPDATE_DELAY_SHEET:
                 time_sheet = time()
                 update_google_sheet(print_log=True)
+            else:
+                build_new_row()
 
-            sleep(60)
+            sleep(120)
 
     except Exception:
         traceback.print_exc()
