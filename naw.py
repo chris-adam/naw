@@ -4,9 +4,11 @@ from datetime import timedelta, datetime
 from time import sleep
 from time import time
 
+import browser_cookie3
 import gspread
 import pandas as pd
 import requests
+import urllib3
 from bs4 import BeautifulSoup
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -45,7 +47,7 @@ def update_google_sheet(print_log=False):
             index = search(col, colonies)
             sheet.update_cell(row_to_replace, index+6, int(new_row.at[0, col]))
         except TypeError:
-            log("La colonie \"{}\" n'a pas été trouvé dans le tableur Google sheet".format(col))
+            log("La colonie \"", col, "\" n'a pas été trouvée dans le tableur Google sheet")
             continue
 
     if print_log:
@@ -60,11 +62,9 @@ def search(key, lst):
             return i
 
 
-def get_releve(url="https://www.natureatwar.fr/descriptionalliance-LA",
-               cookies={'PHPSESSID': 'f2fv7mr07l2e1e53enrrc6gb3o'}):
-    # le mien: o1ffhb38bonmhol1jb5p8gmacd
-
-    r = requests.get(url, cookies=cookies)
+def get_releve(url="https://www.natureatwar.fr/descriptionalliance-LA"):
+    cookies = browser_cookie3.chrome(domain_name='.natureatwar.fr')
+    r = requests.get(url, verify=False, cookies={cookie.name: cookie.value for cookie in cookies}, timeout=3)
     soup = BeautifulSoup(r.text, "html.parser")
     table = soup.find_all("table", {"class": "table-striped"})[1]
     rows = table.find_all("tr")
@@ -86,7 +86,7 @@ def get_releve(url="https://www.natureatwar.fr/descriptionalliance-LA",
 
 def format_releve(releve):
     releve["Tdc"] = [int(tdc.replace(" ", "")) for tdc in releve["Tdc"]]
-    releve["Rank"] = [str(rank.replace(" ", "")) for rank in releve["Rank"]]
+    releve["Rank"] = [str(rank) for rank in releve["Rank"]]
     releve["Pseudo"] = [str(pseudo.find("b"))[3:-4] for pseudo in releve["Pseudo"]]
     releve["Colonie"] = [str(colonie.find("b"))[3:-4] for colonie in releve["Colonie"]]
     releve["Total"] = [int(total.replace(" ", "")) for total in releve["Total"]]
@@ -98,16 +98,22 @@ def format_releve(releve):
 
 def build_new_row():
     disconnected = True
+    releve = None
     while disconnected:
         try:
             releve = get_releve()
-            disconnected = False
         except (AttributeError, IndexError):
-            log("Web scrapping failed, new try")
-            sleep(10)
+            log("Récupération des données échouées, nouvel essai. Si ce problème persiste, reconnecte-toi sur NAW.")
+            sleep(15)
+        except requests.exceptions.ConnectionError:
+            log("Pas de connection internet, nouvel essai dans 15 secondes")
+            sleep(15)
+        else:
+            disconnected = False
 
     new_row = pd.DataFrame({**{"Date": [round_datetime(datetime.today())]},
-                            **{colonie: [tdc] for colonie, tdc in zip(releve["Colonie"], releve["Tdc"])}})
+                            **{colonie: [tdc] for colonie, tdc in reversed(list(zip(releve["Colonie"],
+                                                                                    releve["Tdc"])))}})
 
     return new_row
 
@@ -119,12 +125,14 @@ def round_datetime(tm):
 def log(*message, date=True):
     if date:
         print(datetime.today().strftime('%d-%m-%Y %H:%M:%S'), end=" : ")
-    print(*message)
+    print(*message, sep="")
 
 
 if __name__ == "__main__":
     try:
-        pd.set_option("display.max_columns", 12)
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        pd.set_option("display.max_columns", 10)
         pd.set_option("display.width", 200)
         pd.set_option('display.float_format', lambda x: '%.f' % x)
 
