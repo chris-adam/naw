@@ -10,7 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 from oauth2client.service_account import ServiceAccountCredentials
 
-UPDATE_DELAY_SHEET = 4*60*60  # seconds
+UPDATE_DELAY_SHEET = 8*60*60  # seconds
 
 
 def update_google_sheet(print_log=False):
